@@ -90,7 +90,7 @@ const QueryResultPreview = ({
       const webViewSrc = data.replace('<head>', `<head><base href="${item.requestSent?.url || ''}">`);
       return (
         <webview
-          src={`data:text/html; charset=utf-8,${encodeURIComponent(webViewSrc)}`}
+          src={item.requestSent?.url}
           webpreferences="disableDialogs=true, javascript=yes"
           className="h-full bg-white"
         />

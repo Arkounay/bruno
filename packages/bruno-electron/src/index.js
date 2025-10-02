@@ -50,23 +50,6 @@ const SystemMonitor = require('./app/system-monitor');
 const lastOpenedCollections = new LastOpenedCollections();
 const systemMonitor = new SystemMonitor();
 
-// Reference: https://content-security-policy.com/
-const contentSecurityPolicy = [
-  "default-src 'self'",
-  "connect-src 'self' https://*.posthog.com",
-  "font-src 'self' https: data:;",
-  "frame-src data:",
-  // this has been commented out to make oauth2 work
-  // "form-action 'none'",
-  // we make an exception and allow http for images so that
-  // they can be used as link in the embedded markdown editors
-  "img-src 'self' blob: data: http: https:",
-  "media-src 'self' blob: data: https:",
-  "style-src 'self' 'unsafe-inline' https:"
-];
-
-setContentSecurityPolicy(contentSecurityPolicy.join(';') + ';');
-
 const menu = Menu.buildFromTemplate(menuTemplate);
 
 let mainWindow;
@@ -106,9 +89,10 @@ app.on('ready', async () => {
       nodeIntegration: true,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
+      webSecurity: false,
       webviewTag: true
     },
-    title: 'Bruno',
+    title: 'Bruno Unleashed',
     icon: path.join(__dirname, 'about/256x256.png')
     // we will bring this back
     // see https://github.com/usebruno/bruno/issues/440
