@@ -240,6 +240,51 @@ const NewRequest = ({ collectionUid, item, isEphemeral, onClose }) => {
     }
   }, [inputRef]);
 
+  // Check clipboard for cURL command on component mount
+  useEffect(() => {
+    const checkClipboardForCurl = async () => {
+      try {
+        if (navigator.clipboard && navigator.clipboard.readText) {
+          const clipboardText = await navigator.clipboard.readText();
+
+          // Check if clipboard contains a cURL command
+          const curlCommandRegex = /^\s*curl\s/i;
+          if (curlCommandRegex.test(clipboardText)) {
+            // Parse the cURL command to extract request data
+            const request = getRequestFromCurlCommand(clipboardText);
+            if (request) {
+              // Switch to 'from-curl' mode
+              formik.setFieldValue('requestType', 'from-curl');
+              formik.setFieldValue('curlCommand', clipboardText);
+
+              // Identify the request type (HTTP/GraphQL)
+              identifyCurlRequestType(request.url, request.headers, request.body);
+
+              // Generate automatic request name: METHOD + URL path (without domain)
+              try {
+                const url = new URL(request.url);
+                const pathname = url.pathname || '/';
+                const requestName = `${request.method} ${pathname}`;
+                formik.setFieldValue('requestName', requestName);
+                formik.setFieldTouched('requestName', true);
+              } catch (urlError) {
+                // If URL parsing fails, just use method
+                const requestName = request.method || 'GET';
+                formik.setFieldValue('requestName', requestName);
+                formik.setFieldTouched('requestName', true);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        // Silently fail if clipboard access is denied or not supported
+        console.log('Clipboard access not available or denied');
+      }
+    };
+
+    checkClipboardForCurl();
+  }, []);
+
   const onSubmit = () => formik.handleSubmit();
 
   const handlePaste = useCallback(

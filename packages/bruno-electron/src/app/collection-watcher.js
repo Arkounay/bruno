@@ -172,56 +172,89 @@ const unlinkEnvironmentFile = async (win, pathname, collectionUid) => {
 const add = async (win, pathname, collectionUid, collectionPath, useWorkerThread, watcher) => {
   console.log(`watcher add: ${pathname}`);
 
+  // Early return optimizations - check file extension first to avoid unnecessary checks
+  const basename = path.basename(pathname);
+  const hasBru = hasBruExtension(pathname);
+
+  // 1. Batch file system operations
+  let fileStats, content;
+  try {
+    // Read file stats and content in parallel if needed
+    const needsContent
+      = isBrunoConfigFile(pathname, collectionPath)
+        || isDotEnvFile(pathname, collectionPath)
+        || isBruEnvironmentConfig(pathname, collectionPath)
+        || isCollectionRootBruFile(pathname, collectionPath)
+        || basename === 'folder.bru'
+        || hasBru;
+
+    if (needsContent) {
+      [fileStats, content] = await Promise.all([
+        hasBru ? fs.promises.stat(pathname) : Promise.resolve(null),
+        fs.promises.readFile(pathname, 'utf8')
+      ]);
+    }
+  } catch (err) {
+    console.error(`Error reading file ${pathname}:`, err);
+    return;
+  }
+
+  // 2. Handle bruno.json config
   if (isBrunoConfigFile(pathname, collectionPath)) {
     try {
-      const content = fs.readFileSync(pathname, 'utf8');
       const brunoConfig = JSON.parse(content);
-
       setBrunoConfig(collectionUid, brunoConfig);
     } catch (err) {
       console.error(err);
     }
+    return;
   }
 
+  // 3. Handle .env file
   if (isDotEnvFile(pathname, collectionPath)) {
     try {
-      const content = fs.readFileSync(pathname, 'utf8');
       const jsonData = parseDotEnv(content);
-
       setDotEnvVars(collectionUid, jsonData);
-      const payload = {
-        collectionUid,
-        processEnvVariables: {
-          ...jsonData
-        }
-      };
-      win.webContents.send('main:process-env-update', payload);
+
+      // Send to renderer in a microtask to avoid blocking
+      setImmediate(() => {
+        win.webContents.send('main:process-env-update', {
+          collectionUid,
+          processEnvVariables: jsonData
+        });
+      });
     } catch (err) {
       console.error(err);
     }
+    return;
   }
 
+  // 4. Handle environment config
   if (isBruEnvironmentConfig(pathname, collectionPath)) {
     return addEnvironmentFile(win, pathname, collectionUid, collectionPath);
   }
 
+  // 5. Create file object factory to reduce duplication
+  const createFileObject = (additionalMeta = {}) => ({
+    meta: {
+      collectionUid,
+      pathname,
+      name: basename,
+      ...additionalMeta
+    }
+  });
+
+  // 6. Handle collection root bru file
   if (isCollectionRootBruFile(pathname, collectionPath)) {
-    const file = {
-      meta: {
-        collectionUid,
-        pathname,
-        name: path.basename(pathname),
-        collectionRoot: true
-      }
-    };
+    const file = createFileObject({ collectionRoot: true });
 
     try {
-      let bruContent = fs.readFileSync(pathname, 'utf8');
-
-      file.data = await parseCollection(bruContent);
-
+      file.data = await parseCollection(content);
       hydrateBruCollectionFileWithUuid(file.data);
-      win.webContents.send('main:collection-tree-updated', 'addFile', file);
+
+      setImmediate(() => {
+        win.webContents.send('main:collection-tree-updated', 'addFile', file);
+      });
       return;
     } catch (err) {
       console.error(err);
@@ -229,23 +262,17 @@ const add = async (win, pathname, collectionUid, collectionPath, useWorkerThread
     }
   }
 
-  if (path.basename(pathname) === 'folder.bru') {
-    const file = {
-      meta: {
-        collectionUid,
-        pathname,
-        name: path.basename(pathname),
-        folderRoot: true
-      }
-    };
+  // 7. Handle folder.bru
+  if (basename === 'folder.bru') {
+    const file = createFileObject({ folderRoot: true });
 
     try {
-      let bruContent = fs.readFileSync(pathname, 'utf8');
-
-      file.data = await parseCollection(bruContent);
-
+      file.data = await parseCollection(content);
       hydrateBruCollectionFileWithUuid(file.data);
-      win.webContents.send('main:collection-tree-updated', 'addFile', file);
+
+      setImmediate(() => {
+        win.webContents.send('main:collection-tree-updated', 'addFile', file);
+      });
       return;
     } catch (err) {
       console.error(err);
@@ -253,81 +280,59 @@ const add = async (win, pathname, collectionUid, collectionPath, useWorkerThread
     }
   }
 
-  if (hasBruExtension(pathname)) {
+  // 8. Handle .bru files with optimizations
+  if (hasBru) {
     watcher.addFileToProcessing(collectionUid, pathname);
 
-    const file = {
-      meta: {
-        collectionUid,
-        pathname,
-        name: path.basename(pathname)
-      }
+    const file = createFileObject();
+    const fileSize = fileStats?.size || 0;
+    const fileSizeMB = sizeInMB(fileSize);
+
+    // Helper to send updates
+    const sendUpdate = (data, partial = false, loading = false, error = null) => {
+      file.data = data;
+      file.partial = partial;
+      file.loading = loading;
+      file.size = fileSizeMB;
+      if (error) file.error = error;
+
+      hydrateRequestWithUuid(file.data, pathname);
+
+      // Use setImmediate to batch UI updates
+      setImmediate(() => {
+        win.webContents.send('main:collection-tree-updated', 'addFile', file);
+      });
     };
 
-    const fileStats = fs.statSync(pathname);
-    let bruContent = fs.readFileSync(pathname, 'utf8');
-    // If worker thread is not used, we can directly parse the file
-    if (!useWorkerThread) {
-      try {
-        file.data = await parseRequest(bruContent);
-        file.partial = false;
-        file.loading = false;
-        file.size = sizeInMB(fileStats?.size);
-        hydrateRequestWithUuid(file.data, pathname);
-        win.webContents.send('main:collection-tree-updated', 'addFile', file);
-        
-      } catch (error) {
-        console.error(error);
-      } finally {
-        watcher.markFileAsProcessed(win, collectionUid, pathname);
-      }
-      return;
-    }
-
     try {
-      // we need to send a partial file info to the UI
-      // so that the UI can display the file in the collection tree
-      file.data = {
-        name: path.basename(pathname),
-        type: 'http-request'
-      };
-
-      const metaJson = parseBruFileMeta(bruContent);
-      file.data = metaJson;
-      file.partial = true;
-      file.loading = false;
-      file.size = sizeInMB(fileStats?.size);
-      hydrateRequestWithUuid(file.data, pathname);
-      win.webContents.send('main:collection-tree-updated', 'addFile', file);
-
-      if (fileStats.size < MAX_FILE_SIZE) {
-        // This is to update the loading indicator in the UI
-        file.data = metaJson;
-        file.partial = false;
-        file.loading = true;
-        hydrateRequestWithUuid(file.data, pathname);
-        win.webContents.send('main:collection-tree-updated', 'addFile', file);
-
-        // This is to update the file info in the UI
-        file.data = await parseRequestViaWorker(bruContent);
-        file.partial = false;
-        file.loading = false;
-        hydrateRequestWithUuid(file.data, pathname);
-        win.webContents.send('main:collection-tree-updated', 'addFile', file);
+      // 9. No worker thread path - simplified
+      if (!useWorkerThread) {
+        const data = await parseRequest(content);
+        sendUpdate(data, false, false);
+        return;
       }
-    } catch(error) {
-      file.data = {
-        name: path.basename(pathname),
-        type: 'http-request'
-      };
-      file.error = {
-        message: error?.message
-      };
-      file.partial = true;
-      file.loading = false;
-      file.size = sizeInMB(fileStats?.size);
-      hydrateRequestWithUuid(file.data, pathname);
-      win.webContents.send('main:collection-tree-updated', 'addFile', file);
+
+      // 10. Worker thread path - parse meta once
+      const metaJson = parseBruFileMeta(content);
+
+      // Send partial data first
+      sendUpdate(metaJson, true, false);
+
+      // 11. Only parse full content if file is under size limit
+      if (fileSize < MAX_FILE_SIZE) {
+        // Show loading state
+        sendUpdate(metaJson, false, true);
+
+        // Parse full content
+        const fullData = await parseRequestViaWorker(content);
+        sendUpdate(fullData, false, false);
+      }
+    } catch (error) {
+      console.error(error);
+      sendUpdate({ name: basename, type: 'http-request' },
+        true,
+        false,
+        { message: error?.message });
     } finally {
       watcher.markFileAsProcessed(win, collectionUid, pathname);
     }
@@ -633,7 +638,7 @@ class CollectionWatcher {
     setTimeout(() => {
       const watcher = chokidar.watch(watchPath, {
         ignoreInitial: false,
-        usePolling: isWSLPath(watchPath) || forcePolling ? true : false,
+        usePolling: false,
         ignored: (filepath) => {
           const normalizedPath = normalizeAndResolvePath(filepath);
           const relativePath = path.relative(watchPath, normalizedPath);
@@ -644,10 +649,7 @@ class CollectionWatcher {
         },
         persistent: true,
         ignorePermissionErrors: true,
-        awaitWriteFinish: {
-          stabilityThreshold: 80,
-          pollInterval: 10
-        },
+        awaitWriteFinish: true,
         depth: 20,
         disableGlobbing: true
       });
