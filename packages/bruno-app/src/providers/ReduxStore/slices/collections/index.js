@@ -701,6 +701,59 @@ export const collectionsSlice = createSlice({
         }
       }
     },
+    expandItemAndScrollToIt: (state, action) => {
+      const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
+
+      if (collection) {
+        const item = findItemInCollection(collection, action.payload.itemUid);
+
+        if (item) {
+          // Expand the collection if collapsed
+          if (collection.collapsed) {
+            collection.collapsed = false;
+          }
+
+          // Find and expand all parent folders
+          const expandParentFolders = (items, targetUid, path = []) => {
+            for (const currentItem of items) {
+              if (currentItem.uid === targetUid) {
+                // Found the item, expand all folders in the path
+                path.forEach((folder) => {
+                  if (folder.collapsed) {
+                    folder.collapsed = false;
+                  }
+                });
+                return true;
+              }
+
+              if (isItemAFolder(currentItem)) {
+                const newPath = [...path, currentItem];
+                if (currentItem.items && expandParentFolders(currentItem.items, targetUid, newPath)) {
+                  return true;
+                }
+              }
+            }
+            return false;
+          };
+
+          expandParentFolders(collection.items, action.payload.itemUid);
+
+          // Mark item for highlighting
+          item.shouldHighlight = true;
+        }
+      }
+    },
+    clearItemHighlight: (state, action) => {
+      const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
+
+      if (collection) {
+        const item = findItemInCollection(collection, action.payload.itemUid);
+
+        if (item) {
+          delete item.shouldHighlight;
+        }
+      }
+    },
     requestUrlChanged: (state, action) => {
       const collection = findCollectionByUid(state.collections, action.payload.collectionUid);
 
@@ -2791,6 +2844,8 @@ export const {
   collapseFullCollection,
   toggleCollection,
   toggleCollectionItem,
+  expandItemAndScrollToIt,
+  clearItemHighlight,
   requestUrlChanged,
   updateItemSettings,
   updateAuth,

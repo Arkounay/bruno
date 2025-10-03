@@ -166,7 +166,8 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
     'item-selected': isSelected,
     'item-hovered': isOver && canDrop,
     'drop-target': isOver && dropType === 'inside',
-    'drop-target-above': isOver && dropType === 'adjacent'
+    'drop-target-above': isOver && dropType === 'adjacent',
+    'item-highlight': item.shouldHighlight
   });
 
   const handleRun = async () => {
@@ -444,6 +445,7 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
       )}
       <div
         className={itemRowClassName}
+        data-item-uid={item.uid}
         ref={(node) => {
           ref.current = node;
           drag(drop(node));

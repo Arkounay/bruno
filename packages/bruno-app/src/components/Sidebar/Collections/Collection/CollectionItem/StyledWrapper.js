@@ -2,6 +2,16 @@ import styled from 'styled-components';
 
 const Wrapper = styled.div`
   position: relative;
+
+  @keyframes highlight-pulse {
+    0%, 100% {
+      background-color: transparent;
+    }
+    50% {
+      background-color: rgba(96, 165, 250, 0.3);
+    }
+  }
+
   .menu-icon {
     color: ${(props) => props.theme.sidebar.dropdownIcon.color};
 
@@ -129,15 +139,28 @@ const Wrapper = styled.div`
       .indent-block {
         border-right: ${(props) => props.theme.sidebar.collection.item.active.indentBorder} !important;
       }
+
+      span.item-name {
+        font-weight: 600;
+        color: ${(props) => props.theme.colors.text.black};
+      }
     }
 
     &.item-selected {
       background: ${(props) => props.theme.sidebar.collection.item.hoverBg};
-      opacity: 0.8;
 
       &:hover {
         background: ${(props) => props.theme.sidebar.collection.item.hoverBg} !important;
       }
+
+      span.item-name {
+        font-weight: 600;
+        color: ${(props) => props.theme.colors.text.black};
+      }
+    }
+
+    &.item-highlight {
+      animation: highlight-pulse 2s ease-in-out;
     }
 
     div.tippy-box {
