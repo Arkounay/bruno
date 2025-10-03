@@ -164,6 +164,19 @@ export const HotkeysProvider = (props) => {
     };
   }, []);
 
+  // global search alternative (ctrl/cmd + p)
+  useEffect(() => {
+    Mousetrap.bind([...getKeyBindingsForActionAllOS('globalSearchAlt')], (e) => {
+      setShowGlobalSearchModal(true);
+
+      return false; // stop bubbling
+    });
+
+    return () => {
+      Mousetrap.unbind([...getKeyBindingsForActionAllOS('globalSearchAlt')]);
+    };
+  }, []);
+
   // close tab hotkey
   useEffect(() => {
     Mousetrap.bind([...getKeyBindingsForActionAllOS('closeTab')], (e) => {
