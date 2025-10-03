@@ -250,6 +250,33 @@ const registerRendererEventHandlers = (mainWindow, watcher, lastOpenedCollection
       validatePathIsInsideCollection(pathname, lastOpenedCollections);
       const content = await stringifyRequestViaWorker(request);
       await writeFile(pathname, content);
+
+      // Hydrate the request with UIDs
+      hydrateRequestWithUuid(request, pathname);
+
+      // Immediately notify the renderer about the new file (bypass watcher delay)
+      // Find the collection this file belongs to
+      const watcherPath = watcher?.getWatcherPathByFile?.(pathname);
+      const collectionUid = watcher?.getCollectionUidByWatcherPath?.(watcherPath);
+
+      if (collectionUid && mainWindow) {
+        const basename = path.basename(pathname);
+        const file = {
+          meta: {
+            collectionUid,
+            pathname,
+            name: request.name || basename.replace('.bru', '')
+          },
+          data: request,
+          partial: false,
+          loading: false,
+          size: 0
+        };
+
+        mainWindow.webContents.send('main:collection-tree-updated', 'addFile', file);
+      }
+
+      return request;
     } catch (error) {
       return Promise.reject(error);
     }
@@ -532,6 +559,25 @@ const registerRendererEventHandlers = (mainWindow, watcher, lastOpenedCollection
         const folderBruFilePath = path.join(pathname, 'folder.bru');
         const content = await stringifyFolder(folderBruJsonData);
         await writeFile(folderBruFilePath, content);
+
+        // Immediately notify the renderer about the new directory (bypass watcher delay)
+        const watcherPath = watcher?.getWatcherPathByFile?.(pathname);
+        const collectionUid = watcher?.getCollectionUidByWatcherPath?.(watcherPath);
+
+        if (collectionUid && mainWindow) {
+          const { getRequestUid } = require('../cache/requestUids');
+          const directory = {
+            meta: {
+              collectionUid,
+              pathname,
+              name: folderBruJsonData?.meta?.name || path.basename(pathname),
+              seq: folderBruJsonData?.meta?.seq,
+              uid: getRequestUid(pathname)
+            }
+          };
+
+          mainWindow.webContents.send('main:collection-tree-updated', 'addDir', directory);
+        }
       } else {
         return Promise.reject(new Error('The directory already exists'));
       }

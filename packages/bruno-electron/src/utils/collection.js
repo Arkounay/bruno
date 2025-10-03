@@ -293,14 +293,15 @@ const hydrateRequestWithUuid = (request, pathname) => {
   const bodyMultipartForm = get(request, 'request.body.multipartForm', []);
   const file = get(request, 'request.body.file', []);
 
-  params.forEach((param) => (param.uid = uuid()));
-  headers.forEach((header) => (header.uid = uuid()));
-  requestVars.forEach((variable) => (variable.uid = uuid()));
-  responseVars.forEach((variable) => (variable.uid = uuid()));
-  assertions.forEach((assertion) => (assertion.uid = uuid()));
-  bodyFormUrlEncoded.forEach((param) => (param.uid = uuid()));
-  bodyMultipartForm.forEach((param) => (param.uid = uuid()));
-  file.forEach((param) => (param.uid = uuid()));
+  // Use optional chaining to handle null/undefined values
+  params?.forEach?.((param) => (param.uid = uuid()));
+  headers?.forEach?.((header) => (header.uid = uuid()));
+  requestVars?.forEach?.((variable) => (variable.uid = uuid()));
+  responseVars?.forEach?.((variable) => (variable.uid = uuid()));
+  assertions?.forEach?.((assertion) => (assertion.uid = uuid()));
+  bodyFormUrlEncoded?.forEach?.((param) => (param.uid = uuid()));
+  bodyMultipartForm?.forEach?.((param) => (param.uid = uuid()));
+  file?.forEach?.((param) => (param.uid = uuid()));
 
   return request;
 };

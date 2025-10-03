@@ -216,12 +216,9 @@ const add = async (win, pathname, collectionUid, collectionPath, useWorkerThread
       const jsonData = parseDotEnv(content);
       setDotEnvVars(collectionUid, jsonData);
 
-      // Send to renderer in a microtask to avoid blocking
-      setImmediate(() => {
-        win.webContents.send('main:process-env-update', {
-          collectionUid,
-          processEnvVariables: jsonData
-        });
+      win.webContents.send('main:process-env-update', {
+        collectionUid,
+        processEnvVariables: jsonData
       });
     } catch (err) {
       console.error(err);
@@ -252,9 +249,7 @@ const add = async (win, pathname, collectionUid, collectionPath, useWorkerThread
       file.data = await parseCollection(content);
       hydrateBruCollectionFileWithUuid(file.data);
 
-      setImmediate(() => {
-        win.webContents.send('main:collection-tree-updated', 'addFile', file);
-      });
+      win.webContents.send('main:collection-tree-updated', 'addFile', file);
       return;
     } catch (err) {
       console.error(err);
@@ -270,9 +265,7 @@ const add = async (win, pathname, collectionUid, collectionPath, useWorkerThread
       file.data = await parseCollection(content);
       hydrateBruCollectionFileWithUuid(file.data);
 
-      setImmediate(() => {
-        win.webContents.send('main:collection-tree-updated', 'addFile', file);
-      });
+      win.webContents.send('main:collection-tree-updated', 'addFile', file);
       return;
     } catch (err) {
       console.error(err);
@@ -298,10 +291,8 @@ const add = async (win, pathname, collectionUid, collectionPath, useWorkerThread
 
       hydrateRequestWithUuid(file.data, pathname);
 
-      // Use setImmediate to batch UI updates
-      setImmediate(() => {
-        win.webContents.send('main:collection-tree-updated', 'addFile', file);
-      });
+      // Send immediately for better responsiveness
+      win.webContents.send('main:collection-tree-updated', 'addFile', file);
     };
 
     try {
@@ -625,13 +616,32 @@ class CollectionWatcher {
     delete this.loadingStates[collectionUid];
   }
 
+  getWatcherPathByFile(filepath) {
+    const watcherPaths = Object.keys(this.watchers);
+    return watcherPaths.find((watchPath) => {
+      const absWatchPath = path.resolve(watchPath);
+      const absFilePath = path.resolve(filepath);
+      return absFilePath.startsWith(absWatchPath);
+    });
+  }
+
+  getCollectionUidByWatcherPath(watcherPath) {
+    return this.collectionUidMap?.[watcherPath];
+  }
+
   addWatcher(win, watchPath, collectionUid, brunoConfig, forcePolling = false, useWorkerThread) {
     if (this.watchers[watchPath]) {
       this.watchers[watchPath].close();
     }
 
+    // Track collectionUid by watcherPath
+    if (!this.collectionUidMap) {
+      this.collectionUidMap = {};
+    }
+    this.collectionUidMap[watchPath] = collectionUid;
+
     this.initializeLoadingState(collectionUid);
-    
+
     this.startCollectionDiscovery(win, collectionUid);
 
     const ignores = brunoConfig?.ignore || [];
@@ -649,7 +659,10 @@ class CollectionWatcher {
         },
         persistent: true,
         ignorePermissionErrors: true,
-        awaitWriteFinish: true,
+        awaitWriteFinish: {
+          stabilityThreshold: 300,
+          pollInterval: 100
+        },
         depth: 20,
         disableGlobbing: true
       });
@@ -697,7 +710,11 @@ class CollectionWatcher {
       this.watchers[watchPath].close();
       this.watchers[watchPath] = null;
     }
-    
+
+    if (this.collectionUidMap?.[watchPath]) {
+      delete this.collectionUidMap[watchPath];
+    }
+
     if (collectionUid) {
       this.cleanupLoadingState(collectionUid);
     }
