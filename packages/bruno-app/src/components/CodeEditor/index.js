@@ -141,6 +141,37 @@ export default class CodeEditor extends React.Component {
           }
         },
         'Alt-A': 'selectNextOccurrence',
+        'Alt-Enter': (cm) => {
+          const selection = cm.getSelection();
+          if (selection) {
+            const cursor = cm.getSearchCursor(selection, cm.getCursor());
+            const selections = [];
+            let match;
+
+            // Find all occurrences
+            cm.operation(() => {
+              while (cursor.findNext()) {
+                selections.push({ anchor: cursor.from(), head: cursor.to() });
+              }
+
+              // Reset to beginning and find occurrences before cursor
+              const newCursor = cm.getSearchCursor(selection);
+              while (newCursor.findNext()) {
+                const from = newCursor.from();
+                const to = newCursor.to();
+                const exists = selections.some((s) =>
+                  s.anchor.line === from.line && s.anchor.ch === from.ch);
+                if (!exists) {
+                  selections.push({ anchor: from, head: to });
+                }
+              }
+
+              if (selections.length > 0) {
+                cm.setSelections(selections);
+              }
+            });
+          }
+        },
         'Ctrl-D': 'deleteLine',
         'Alt-Down': 'swapLineDown',
         'Ctrl-Alt-Down': (cm) => {
