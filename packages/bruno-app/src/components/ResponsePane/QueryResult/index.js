@@ -211,7 +211,7 @@ const QueryResult = ({ item, collection, data, dataBuffer, disableRunEventListen
               displayedTheme={displayedTheme}
             />
             {queryFilterEnabled && (
-              <QueryResultFilter filter={filter} onChange={debouncedResultFilterOnChange} mode={mode} />
+              <QueryResultFilter filter={filter} onChange={debouncedResultFilterOnChange} mode={mode} headers={headers} />
             )}
           </div>
         </div>

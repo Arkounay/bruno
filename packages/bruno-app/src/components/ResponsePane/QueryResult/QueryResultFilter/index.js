@@ -1,10 +1,10 @@
-import { IconFilter, IconX } from '@tabler/icons';
+import { IconFilter, IconX, IconBug, IconBrandSymfony } from '@tabler/icons';
 import React, { useMemo } from 'react';
 import { useRef } from 'react';
 import { useState } from 'react';
 import { Tooltip as ReactInfotip } from 'react-tooltip';
 
-const QueryResultFilter = ({ filter, onChange, mode }) => {
+const QueryResultFilter = ({ filter, onChange, mode, headers }) => {
   const inputRef = useRef(null);
   const [isExpanded, toggleExpand] = useState(false);
 
@@ -43,6 +43,25 @@ const QueryResultFilter = ({ filter, onChange, mode }) => {
     return null;
   }, [mode]);
 
+  const symfonyDebugUrl = useMemo(() => {
+    if (!headers || typeof headers !== 'object') return null;
+
+    // Search for x-debug-token-link header (case-insensitive)
+    const debugTokenKey = Object.keys(headers).find((key) => key.toLowerCase() === 'x-debug-token-link');
+
+    if (debugTokenKey && headers[debugTokenKey]) {
+      return headers[debugTokenKey];
+    }
+
+    return null;
+  }, [headers]);
+
+  const handleSymfonyIconClick = () => {
+    if (symfonyDebugUrl) {
+      window.open(symfonyDebugUrl, '_blank');
+    }
+  };
+
   return (
     <div
       className={
@@ -50,6 +69,7 @@ const QueryResultFilter = ({ filter, onChange, mode }) => {
       }
     >
       {infotipText && !isExpanded && <ReactInfotip anchorId={'request-filter-icon'} html={infotipText} />}
+      {symfonyDebugUrl && <ReactInfotip anchorId="symfony-profiler-icon" html="Open Symfony Profiler" />}
       <input
         ref={inputRef}
         type="text"
@@ -65,6 +85,16 @@ const QueryResultFilter = ({ filter, onChange, mode }) => {
         }`}
         onChange={onChange}
       />
+      {symfonyDebugUrl && (
+        <div
+          className="text-gray-500 sm:text-sm cursor-pointer pointer-events-auto"
+          id="symfony-profiler-icon"
+          onClick={handleSymfonyIconClick}
+          title="Open Symfony Profiler"
+        >
+          <IconBrandSymfony size={20} strokeWidth={1.5} />
+        </div>
+      )}
       <div className="text-gray-500 sm:text-sm cursor-pointer pointer-events-auto" id="request-filter-icon" onClick={handleFilterClick}>
         {isExpanded ? <IconX size={20} strokeWidth={1.5} /> : <IconFilter size={20} strokeWidth={1.5} />}
       </div>
