@@ -274,6 +274,14 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
     });
   };
 
+  const handleKeyDown = (event) => {
+    if (event.key === 'Delete' && isTabForItemActive) {
+      event.preventDefault();
+      event.stopPropagation();
+      setDeleteItemModalOpen(true);
+    }
+  };
+
   const folderItems = sortByNameThenSequence(filter(item.items, (i) => isItemAFolder(i))); 
   const requestItems = sortItemsBySequence(filter(item.items, (i) => isItemARequest(i)));
  
@@ -338,6 +346,8 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
           ref.current = node;
           drag(drop(node));
         }}
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
       >
         <div className="flex items-center h-full w-full">
           {indents && indents.length
