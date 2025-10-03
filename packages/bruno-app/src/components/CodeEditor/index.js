@@ -140,7 +140,15 @@ export default class CodeEditor extends React.Component {
             this.props.onPrettify();
           }
         },
-        'Alt-A': 'selectNextOccurrence'
+        'Alt-A': 'selectNextOccurrence',
+        'Ctrl-D': 'deleteLine',
+        'Alt-Down': 'swapLineDown',
+        'Ctrl-Alt-Down': (cm) => {
+          const cursor = cm.getCursor();
+          const line = cm.getLine(cursor.line);
+          cm.replaceRange('\n' + line, { line: cursor.line, ch: line.length });
+          cm.setCursor({ line: cursor.line + 1, ch: cursor.ch });
+        }
       },
       foldOptions: {
         widget: (from, to) => {
