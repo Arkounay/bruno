@@ -707,6 +707,31 @@ export const deleteItem = (itemUid, collectionUid) => (dispatch, getState) => {
   });
 };
 
+export const deleteMultipleItems = (itemUids, collectionUid) => (dispatch, getState) => {
+  const state = getState();
+  const collection = findCollectionByUid(state.collections.collections, collectionUid);
+
+  return new Promise((resolve, reject) => {
+    if (!collection) {
+      return reject(new Error('Collection not found'));
+    }
+
+    const { ipcRenderer } = window;
+    const deletePromises = [];
+
+    itemUids.forEach((itemUid) => {
+      const item = findItemInCollection(collection, itemUid);
+      if (item) {
+        deletePromises.push(ipcRenderer.invoke('renderer:delete-item', item.pathname, item.type));
+      }
+    });
+
+    Promise.all(deletePromises)
+      .then(() => resolve())
+      .catch((error) => reject(error));
+  });
+};
+
 export const sortCollections = (payload) => (dispatch) => {
   dispatch(_sortCollections(payload));
 };

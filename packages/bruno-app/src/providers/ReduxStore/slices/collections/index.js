@@ -47,7 +47,8 @@ const grpcStatusCodes = {
 const initialState = {
   collections: [],
   collectionSortOrder: 'default',
-  activeConnections: []
+  activeConnections: [],
+  selectedItems: []
 };
 
 const initiatedGrpcResponse = {
@@ -161,6 +162,38 @@ export const collectionsSlice = createSlice({
       state.collections = state.collections.filter((i) => i.uid !== draggedItem.uid); // Remove dragged item
       const targetItemIndex = state.collections.findIndex((i) => i.uid === targetItem.uid); // Find target item
       state.collections.splice(targetItemIndex, 0, draggedItem); // Insert dragged-item above target-item
+    },
+    selectItem: (state, action) => {
+      const { itemUid, collectionUid } = action.payload;
+      const existingIndex = state.selectedItems.findIndex((item) => item.itemUid === itemUid && item.collectionUid === collectionUid);
+      if (existingIndex === -1) {
+        state.selectedItems.push({ itemUid, collectionUid });
+      }
+    },
+    deselectItem: (state, action) => {
+      const { itemUid, collectionUid } = action.payload;
+      state.selectedItems = state.selectedItems.filter((item) => !(item.itemUid === itemUid && item.collectionUid === collectionUid));
+    },
+    toggleItemSelection: (state, action) => {
+      const { itemUid, collectionUid } = action.payload;
+      const existingIndex = state.selectedItems.findIndex((item) => item.itemUid === itemUid && item.collectionUid === collectionUid);
+      if (existingIndex === -1) {
+        state.selectedItems.push({ itemUid, collectionUid });
+      } else {
+        state.selectedItems.splice(existingIndex, 1);
+      }
+    },
+    selectItemRange: (state, action) => {
+      const { itemUids, collectionUid } = action.payload;
+      // Clear existing selections for this collection
+      state.selectedItems = state.selectedItems.filter((item) => item.collectionUid !== collectionUid);
+      // Add all items in range
+      itemUids.forEach((itemUid) => {
+        state.selectedItems.push({ itemUid, collectionUid });
+      });
+    },
+    clearSelection: (state) => {
+      state.selectedItems = [];
     },
     updateLastAction: (state, action) => {
       const { collectionUid, lastAction } = action.payload;
@@ -2849,7 +2882,12 @@ export const {
   addRequestTag,
   deleteRequestTag,
   updateCollectionTagsList,
-  updateActiveConnections
+  updateActiveConnections,
+  selectItem,
+  deselectItem,
+  toggleItemSelection,
+  selectItemRange,
+  clearSelection
 } = collectionsSlice.actions;
 
 export default collectionsSlice.reducer;

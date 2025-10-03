@@ -131,6 +131,15 @@ const Wrapper = styled.div`
       }
     }
 
+    &.item-selected {
+      background: ${(props) => props.theme.sidebar.collection.item.hoverBg};
+      opacity: 0.8;
+
+      &:hover {
+        background: ${(props) => props.theme.sidebar.collection.item.hoverBg} !important;
+      }
+    }
+
     div.tippy-box {
       position: relative;
       top: -0.625rem;

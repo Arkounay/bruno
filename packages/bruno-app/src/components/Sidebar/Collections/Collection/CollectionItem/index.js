@@ -8,13 +8,14 @@ import { IconChevronRight, IconDots } from '@tabler/icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { addTab, focusTab, makeTabPermanent } from 'providers/ReduxStore/slices/tabs';
 import { handleCollectionItemDrop, sendRequest, showInFolder } from 'providers/ReduxStore/slices/collections/actions';
-import { toggleCollectionItem } from 'providers/ReduxStore/slices/collections';
+import { toggleCollectionItem, selectItem, deselectItem, toggleItemSelection, selectItemRange, clearSelection } from 'providers/ReduxStore/slices/collections';
 import Dropdown from 'components/Dropdown';
 import NewRequest from 'components/Sidebar/NewRequest';
 import NewFolder from 'components/Sidebar/NewFolder';
 import RenameCollectionItem from './RenameCollectionItem';
 import CloneCollectionItem from './CloneCollectionItem';
 import DeleteCollectionItem from './DeleteCollectionItem';
+import DeleteMultipleItems from './DeleteMultipleItems';
 import RunCollectionItem from './RunCollectionItem';
 import GenerateCodeItem from './GenerateCodeItem';
 import { isItemARequest, isItemAFolder } from 'utils/tabs';
@@ -38,9 +39,14 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
 
   const _isTabForItemPresentSelector = isTabForItemPresentSelector({ itemUid: item.uid });
   const isTabForItemPresent = useSelector(_isTabForItemPresentSelector, isEqual);
-  
+
   const isSidebarDragging = useSelector((state) => state.app.isDragging);
+  const selectedItems = useSelector((state) => state.collections.selectedItems);
+  const collection = useSelector((state) => state.collections.collections?.find((c) => c.uid === collectionUid));
+  const isSelected = selectedItems.some((selectedItem) => selectedItem.itemUid === item.uid && selectedItem.collectionUid === collectionUid);
   const dispatch = useDispatch();
+
+  const lastClickedItemRef = useRef(null);
 
   // We use a single ref for drag and drop.
   const ref = useRef(null);
@@ -48,6 +54,7 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
   const [renameItemModalOpen, setRenameItemModalOpen] = useState(false);
   const [cloneItemModalOpen, setCloneItemModalOpen] = useState(false);
   const [deleteItemModalOpen, setDeleteItemModalOpen] = useState(false);
+  const [deleteMultipleItemsModalOpen, setDeleteMultipleItemsModalOpen] = useState(false);
   const [generateCodeItemModalOpen, setGenerateCodeItemModalOpen] = useState(false);
   const [newRequestModalOpen, setNewRequestModalOpen] = useState(false);
   const [newFolderModalOpen, setNewFolderModalOpen] = useState(false);
@@ -156,6 +163,7 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
 
   const itemRowClassName = classnames('flex collection-item-name relative items-center', {
     'item-focused-in-tab': isTabForItemActive,
+    'item-selected': isSelected,
     'item-hovered': isOver && canDrop,
     'drop-target': isOver && dropType === 'inside',
     'drop-target-above': isOver && dropType === 'adjacent'
@@ -171,7 +179,81 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
 
   const handleClick = (event) => {
     if (event && event.detail != 1) return;
-    //scroll to the active tab
+
+    // Handle multi-select with shift key
+    if (event && event.shiftKey) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (collection) {
+        // Helper to sort items by sequence
+        const sortItemsBySeq = (items = []) => {
+          return items.sort((a, b) => a.seq - b.seq);
+        };
+
+        // Flatten only visible items in the exact same order as rendering
+        // (folders sorted by name/sequence first, then requests sorted by sequence)
+        const flattenVisibleItems = (items, acc = []) => {
+          const folders = sortByNameThenSequence(filter(items, (i) => isItemAFolder(i)));
+          const requests = sortItemsBySeq(filter(items, (i) => isItemARequest(i)));
+
+          // Add folders first
+          folders.forEach((folder) => {
+            acc.push(folder.uid);
+            // Only recurse into children if folder is not collapsed
+            if (folder.items && folder.items.length > 0 && !folder.collapsed) {
+              flattenVisibleItems(folder.items, acc);
+            }
+          });
+
+          // Then add requests
+          requests.forEach((request) => {
+            acc.push(request.uid);
+          });
+
+          return acc;
+        };
+
+        const allVisibleItemUids = flattenVisibleItems(collection.items);
+        const currentIndex = allVisibleItemUids.indexOf(item.uid);
+
+        if (selectedItems.length > 0) {
+          const lastSelectedItem = selectedItems[selectedItems.length - 1];
+          const lastIndex = allVisibleItemUids.indexOf(lastSelectedItem.itemUid);
+
+          if (lastIndex !== -1 && currentIndex !== -1) {
+            const start = Math.min(lastIndex, currentIndex);
+            const end = Math.max(lastIndex, currentIndex);
+            const rangeUids = allVisibleItemUids.slice(start, end + 1);
+
+            dispatch(selectItemRange({ itemUids: rangeUids, collectionUid }));
+            return;
+          }
+        }
+      }
+
+      // If shift+click but no previous selection, just select this item
+      dispatch(selectItem({ itemUid: item.uid, collectionUid }));
+      return;
+    }
+
+    // Handle Ctrl/Cmd+Click for multi-select toggle
+    if (event && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      event.stopPropagation();
+      dispatch(toggleItemSelection({ itemUid: item.uid, collectionUid }));
+      return;
+    }
+
+    // Regular click - select only this item and clear others
+    if (selectedItems.length > 1 || (selectedItems.length === 1 && !isSelected)) {
+      dispatch(clearSelection());
+      dispatch(selectItem({ itemUid: item.uid, collectionUid }));
+    } else if (!isSelected) {
+      dispatch(selectItem({ itemUid: item.uid, collectionUid }));
+    }
+
+    // scroll to the active tab
     setTimeout(scrollToTheActiveTab, 50);
     const isRequest = isItemARequest(item);
     if (isRequest) {
@@ -275,14 +357,24 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
   };
 
   const handleKeyDown = (event) => {
-    if (event.key === 'Delete' && isTabForItemActive) {
+    if (event.key === 'Delete') {
       event.preventDefault();
       event.stopPropagation();
-      setDeleteItemModalOpen(true);
+
+      // Check if multiple items are selected
+      const currentCollectionSelectedItems = selectedItems.filter((selectedItem) => selectedItem.collectionUid === collectionUid);
+
+      if (currentCollectionSelectedItems.length > 1) {
+        // Open bulk delete modal
+        setDeleteMultipleItemsModalOpen(true);
+      } else if (isTabForItemActive || isSelected) {
+        // Open single delete modal
+        setDeleteItemModalOpen(true);
+      }
     }
   };
 
-  const folderItems = sortByNameThenSequence(filter(item.items, (i) => isItemAFolder(i))); 
+  const folderItems = sortByNameThenSequence(filter(item.items, (i) => isItemAFolder(i)));
   const requestItems = sortItemsBySequence(filter(item.items, (i) => isItemARequest(i)));
  
   const handleGenerateCode = (e) => {
@@ -324,6 +416,16 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
       )}
       {deleteItemModalOpen && (
         <DeleteCollectionItem item={item} collectionUid={collectionUid} onClose={() => setDeleteItemModalOpen(false)} />
+      )}
+      {deleteMultipleItemsModalOpen && (
+        <DeleteMultipleItems
+          itemUids={selectedItems.filter((si) => si.collectionUid === collectionUid).map((si) => si.itemUid)}
+          collectionUid={collectionUid}
+          onClose={() => {
+            setDeleteMultipleItemsModalOpen(false);
+            dispatch(clearSelection());
+          }}
+        />
       )}
       {newRequestModalOpen && (
         <NewRequest item={item} collectionUid={collectionUid} onClose={() => setNewRequestModalOpen(false)} />
@@ -476,7 +578,12 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
                 className="dropdown-item delete-item"
                 onClick={(e) => {
                   dropdownTippyRef.current.hide();
-                  setDeleteItemModalOpen(true);
+                  const currentCollectionSelectedItems = selectedItems.filter((selectedItem) => selectedItem.collectionUid === collectionUid);
+                  if (currentCollectionSelectedItems.length > 1) {
+                    setDeleteMultipleItemsModalOpen(true);
+                  } else {
+                    setDeleteItemModalOpen(true);
+                  }
                 }}
               >
                 Delete
