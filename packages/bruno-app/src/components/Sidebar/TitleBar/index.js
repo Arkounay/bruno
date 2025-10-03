@@ -85,7 +85,7 @@ const TitleBar = () => {
           <span aria-hidden>
             <Bruno width={30} />
           </span>
-          bruno
+          bruno unleashed
         </button>
         <div className="collection-dropdown flex flex-grow items-center justify-end">
           <Dropdown onCreate={onMenuDropdownCreate} icon={<MenuIcon />} placement="bottom-start">
