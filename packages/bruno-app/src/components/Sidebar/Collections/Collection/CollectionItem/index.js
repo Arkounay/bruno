@@ -179,7 +179,8 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
   };
 
   const handleClick = (event) => {
-    if (event && event.detail != 1) return;
+    // Only check detail for mouse events (keyboard events don't have detail property)
+    if (event && event.detail && event.detail != 1) return;
 
     // Handle multi-select with shift key
     if (event && event.shiftKey) {
@@ -358,7 +359,11 @@ const CollectionItem = ({ item, collectionUid, collectionPathname, searchText })
   };
 
   const handleKeyDown = (event) => {
-    if (event.key === 'Delete') {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      event.stopPropagation();
+      handleClick(event);
+    } else if (event.key === 'Delete') {
       event.preventDefault();
       event.stopPropagation();
 
