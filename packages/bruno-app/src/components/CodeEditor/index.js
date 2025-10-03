@@ -139,7 +139,8 @@ export default class CodeEditor extends React.Component {
           if (this.props.onPrettify) {
             this.props.onPrettify();
           }
-        }
+        },
+        'Alt-A': 'selectNextOccurrence'
       },
       foldOptions: {
         widget: (from, to) => {
