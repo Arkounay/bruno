@@ -17,6 +17,28 @@ const Wrapper = styled.div`
 
       &.value {
         word-break: break-all;
+
+        .copy-button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 4px;
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          color: ${(props) => props.theme.text};
+          opacity: 0.6;
+          transition: opacity 0.2s;
+          vertical-align: middle;
+
+          &:hover {
+            opacity: 1;
+          }
+
+          &:active {
+            opacity: 0.8;
+          }
+        }
       }
     }
 
