@@ -9,6 +9,9 @@ import { updateRequestBody } from 'providers/ReduxStore/slices/collections';
 import { sendRequest, saveRequest } from 'providers/ReduxStore/slices/collections/actions';
 import StyledWrapper from './StyledWrapper';
 import FileBody from '../FileBody/index';
+import { format, applyEdits } from 'jsonc-parser';
+import xmlFormat from 'xml-formatter';
+import { toastError } from 'utils/common/error';
 
 const RequestBody = ({ item, collection }) => {
   const dispatch = useDispatch();
@@ -29,6 +32,33 @@ const RequestBody = ({ item, collection }) => {
 
   const onRun = () => dispatch(sendRequest(item, collection.uid));
   const onSave = () => dispatch(saveRequest(item.uid, collection.uid));
+
+  const onPrettify = () => {
+    if (body?.json && bodyMode === 'json') {
+      try {
+        const edits = format(body.json, undefined, { tabSize: 2, insertSpaces: true });
+        const prettyBodyJson = applyEdits(body.json, edits);
+        dispatch(updateRequestBody({
+          content: prettyBodyJson,
+          itemUid: item.uid,
+          collectionUid: collection.uid
+        }));
+      } catch (e) {
+        toastError(new Error('Unable to prettify. Invalid JSON format.'));
+      }
+    } else if (body?.xml && bodyMode === 'xml') {
+      try {
+        const prettyBodyXML = xmlFormat(body.xml, { collapseContent: true });
+        dispatch(updateRequestBody({
+          content: prettyBodyXML,
+          itemUid: item.uid,
+          collectionUid: collection.uid
+        }));
+      } catch (e) {
+        toastError(new Error('Unable to prettify. Invalid XML format.'));
+      }
+    }
+  };
 
   if (['json', 'xml', 'text', 'sparql'].includes(bodyMode)) {
     let codeMirrorMode = {
@@ -57,6 +87,7 @@ const RequestBody = ({ item, collection }) => {
           onEdit={onEdit}
           onRun={onRun}
           onSave={onSave}
+          onPrettify={['json', 'xml'].includes(bodyMode) ? onPrettify : null}
           mode={codeMirrorMode[bodyMode]}
           enableVariableHighlighting={true}
           showHintsFor={['variables']}

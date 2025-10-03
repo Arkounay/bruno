@@ -129,6 +129,16 @@ export default class CodeEditor extends React.Component {
           } else {
             this.editor.toggleComment();
           }
+        },
+        'Shift-Ctrl-F': (cm) => {
+          if (this.props.onPrettify) {
+            this.props.onPrettify();
+          }
+        },
+        'Shift-Cmd-F': (cm) => {
+          if (this.props.onPrettify) {
+            this.props.onPrettify();
+          }
         }
       },
       foldOptions: {
