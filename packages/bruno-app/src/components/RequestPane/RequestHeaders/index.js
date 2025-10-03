@@ -16,12 +16,28 @@ import BulkEditor from '../../BulkEditor';
 
 const headerAutoCompleteList = StandardHTTPHeaders.map((e) => e.header);
 
+const secondaryHeaderKeys = [
+  'accept',
+  'accept-language',
+  'origin',
+  'referer',
+  'sec-ch-ua',
+  'sec-ch-ua-mobile',
+  'sec-ch-ua-platform',
+  'sec-fetch-dest',
+  'sec-fetch-mode',
+  'sec-fetch-site',
+  'sec-gpc',
+  'user-agent'
+];
+
 const RequestHeaders = ({ item, collection, addHeaderText }) => {
   const dispatch = useDispatch();
   const { storedTheme } = useTheme();
   const headers = item.draft ? get(item, 'draft.request.headers') : get(item, 'request.headers');
-  
+
   const [isBulkEditMode, setIsBulkEditMode] = useState(false);
+  const [isSecondaryHeadersExpanded, setIsSecondaryHeadersExpanded] = useState(false);
 
   const addHeader = () => {
     dispatch(
@@ -87,37 +103,28 @@ const RequestHeaders = ({ item, collection, addHeaderText }) => {
     dispatch(setRequestHeaders({ collectionUid: collection.uid, itemUid: item.uid, headers: newHeaders }));
   };
 
-  if (isBulkEditMode) {
-    return (
-      <StyledWrapper className="w-full mt-3">
-        <BulkEditor
-          params={headers}
-          onChange={handleBulkHeadersChange}
-          onToggle={toggleBulkEditMode}
-          onSave={onSave}
-          onRun={handleRun}
-        />
-      </StyledWrapper>
-    );
-  }
+  const primaryHeaders = headers?.filter((header) =>
+    !secondaryHeaderKeys.includes(header.name?.toLowerCase())) || [];
 
-  return (
-    <StyledWrapper className="w-full">
-      <Table
-        headers={[
-          { name: 'Key', accessor: 'key', width: '34%' },
-          { name: 'Value', accessor: 'value', width: '46%' },
-          { name: '', accessor: '', width: '20%' }
-        ]}
-      >
-        <ReorderTable updateReorderedItem={handleHeaderDrag}>
-        {headers && headers.length
-            ? headers.map((header) => {
-                return (
-                  <tr key={header.uid} data-uid={header.uid}>
-                    <td className='flex relative'>
-                      <SingleLineEditor
-                        value={header.name}
+  const secondaryHeaders = headers?.filter((header) =>
+    secondaryHeaderKeys.includes(header.name?.toLowerCase())) || [];
+
+  const renderHeaderTable = (headersToRender) => (
+    <Table
+      headers={[
+        { name: 'Key', accessor: 'key', width: '34%' },
+        { name: 'Value', accessor: 'value', width: '46%' },
+        { name: '', accessor: '', width: '20%' }
+      ]}
+    >
+      <ReorderTable updateReorderedItem={handleHeaderDrag}>
+        {headersToRender && headersToRender.length
+          ? headersToRender.map((header) => {
+              return (
+                <tr key={header.uid} data-uid={header.uid}>
+                  <td className="flex relative">
+                    <SingleLineEditor
+                      value={header.name}
                         theme={storedTheme}
                         onSave={onSave}
                         onChange={(newValue) =>
@@ -177,8 +184,27 @@ const RequestHeaders = ({ item, collection, addHeaderText }) => {
                 );
               })
             : null}
-        </ReorderTable>
-      </Table>
+      </ReorderTable>
+    </Table>
+  );
+
+  if (isBulkEditMode) {
+    return (
+      <StyledWrapper className="w-full mt-3">
+        <BulkEditor
+          params={headers}
+          onChange={handleBulkHeadersChange}
+          onToggle={toggleBulkEditMode}
+          onSave={onSave}
+          onRun={handleRun}
+        />
+      </StyledWrapper>
+    );
+  }
+
+  return (
+    <StyledWrapper className="w-full">
+      {renderHeaderTable(primaryHeaders)}
       <div className="flex justify-between mt-2">
         <button className="btn-action text-link pr-2 py-3 select-none" onClick={addHeader}>
           + {addHeaderText || 'Add Header'}
@@ -187,6 +213,23 @@ const RequestHeaders = ({ item, collection, addHeaderText }) => {
           Bulk Edit
         </button>
       </div>
+
+      {secondaryHeaders.length > 0 && (
+        <div className="mt-4">
+          <button
+            className="text-xs font-semibold text-gray-600 flex items-center hover:text-gray-800"
+            onClick={() => setIsSecondaryHeadersExpanded(!isSecondaryHeadersExpanded)}
+          >
+            <span className="mr-1">{isSecondaryHeadersExpanded ? '▼' : '▶'}</span>
+            Secondary Headers ({secondaryHeaders.length})
+          </button>
+          {isSecondaryHeadersExpanded && (
+            <div className="mt-2">
+              {renderHeaderTable(secondaryHeaders)}
+            </div>
+          )}
+        </div>
+      )}
     </StyledWrapper>
   );
 };
