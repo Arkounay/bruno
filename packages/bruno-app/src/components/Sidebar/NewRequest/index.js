@@ -260,18 +260,21 @@ const NewRequest = ({ collectionUid, item, isEphemeral, onClose }) => {
               // Identify the request type (HTTP/GraphQL)
               identifyCurlRequestType(request.url, request.headers, request.body);
 
-              // Generate automatic request name: METHOD + URL path (without domain)
+              // Generate automatic request name: URL path (without domain)
               try {
                 const url = new URL(request.url);
                 const pathname = url.pathname || '/';
-                const requestName = `${request.method} ${pathname}`;
-                formik.setFieldValue('requestName', requestName);
-                formik.setFieldTouched('requestName', true);
+                formik.setFieldValue('requestName', pathname);
+                formik.setFieldValue('filename', sanitizeName(pathname));
+                formik.setFieldTouched('requestName', false);
+                formik.setFieldTouched('filename', false);
               } catch (urlError) {
-                // If URL parsing fails, just use method
-                const requestName = request.method || 'GET';
+                // If URL parsing fails, use a default name
+                const requestName = 'New Request';
                 formik.setFieldValue('requestName', requestName);
-                formik.setFieldTouched('requestName', true);
+                formik.setFieldValue('filename', sanitizeName(requestName));
+                formik.setFieldTouched('requestName', false);
+                formik.setFieldTouched('filename', false);
               }
             }
           }
